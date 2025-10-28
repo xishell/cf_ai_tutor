@@ -13,22 +13,17 @@ import {
   createUIMessageStreamResponse,
   type ToolSet
 } from "ai";
-import { openai } from "@ai-sdk/openai";
 import { processToolCalls, cleanupMessages } from "./utils";
 import { tools, executions } from "./tools";
-// import { env } from "cloudflare:workers";
+import { workersai } from "workers-ai-provider";
 
-const model = openai("gpt-4o-2024-11-20");
-// Cloudflare AI Gateway
-// const openai = createOpenAI({
-//   apiKey: env.OPENAI_API_KEY,
-//   baseURL: env.GATEWAY_BASE_URL,
-// });
+const model = workersai("@cf/meta/llama-3.3-70b-instruct-fp8-fast");
 
 /**
- * Chat Agent implementation that handles real-time AI chat interactions
+ * Study Tutor Agent that converts course materials into flashcards
+ * and helps students learn through spaced repetition
  */
-export class Chat extends AIChatAgent<Env> {
+export class StudyTutorAgent extends AIChatAgent<Env> {
   /**
    * Handles incoming chat messages and manages the response stream
    */
@@ -61,11 +56,22 @@ export class Chat extends AIChatAgent<Env> {
         });
 
         const result = streamText({
-          system: `You are a helpful assistant that can do various tasks... 
+          system: `You are an AI study tutor that helps students learn by converting course materials into flashcards.
 
-${getSchedulePrompt({ date: new Date() })}
+Your capabilities:
+- Accept text content, lecture notes, or study materials from students
+- Generate effective flashcards with clear questions and concise answers
+- Help students review flashcards using spaced repetition
+- Track which flashcards students have mastered
+- Provide encouragement and study tips
 
-If the user asks to schedule a task, use the schedule tool to schedule the task.
+When creating flashcards:
+- Focus on key concepts, definitions, and important facts
+- Make questions clear and specific
+- Keep answers concise but complete
+- Create 5-10 flashcards per topic unless otherwise requested
+
+Be encouraging and supportive to help students succeed!
 `,
 
           messages: convertToModelMessages(processedMessages),
@@ -110,19 +116,6 @@ If the user asks to schedule a task, use the schedule tool to schedule the task.
  */
 export default {
   async fetch(request: Request, env: Env, _ctx: ExecutionContext) {
-    const url = new URL(request.url);
-
-    if (url.pathname === "/check-open-ai-key") {
-      const hasOpenAIKey = !!process.env.OPENAI_API_KEY;
-      return Response.json({
-        success: hasOpenAIKey
-      });
-    }
-    if (!process.env.OPENAI_API_KEY) {
-      console.error(
-        "OPENAI_API_KEY is not set, don't forget to set it locally in .dev.vars, and use `wrangler secret bulk .dev.vars` to upload it to production"
-      );
-    }
     return (
       // Route the request to our agent or return 404 if not found
       (await routeAgentRequest(request, env)) ||
